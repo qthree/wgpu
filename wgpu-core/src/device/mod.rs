@@ -3593,6 +3593,51 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(sc_id)
     }
 
+    pub fn surface_drop(&self, surface_id: id::SurfaceId) {
+        span!(_guard, INFO, "Surface::drop");
+        tracing::trace!("droping surface");
+        let mut token = Token::root();
+
+        let (mut surface_guard, _) = self.surfaces.write(&mut token);
+        let surface = surface_guard.remove(surface_id).expect("Expect valid surface to drop");
+        self.instance.destroy_surface(surface);
+    }
+
+    pub fn swap_chain_drop<B: GfxBackend>(&self, swap_chain_id: id::SwapChainId) {
+        span!(_guard, INFO, "SwapChain::drop");
+        tracing::trace!("droping swap chain");
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut surface_guard, mut token) = self.surfaces.write(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let swap_chain = {
+            let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
+            swap_chain_guard.remove(swap_chain_id).expect("Expect valid swap chain to drop it.")
+        };
+
+        if swap_chain.acquired_view_id.is_some() {
+            //return Err(swap_chain::CreateSwapChainError::SwapChainOutputExists);
+            panic!("Swap chain dropped while frame view is still alive");
+        }
+
+        let device = &device_guard[swap_chain.device_id.value];
+
+        unsafe {
+            device.raw.destroy_semaphore(swap_chain.semaphore);
+        }
+
+        let surface_id = swap_chain_id.to_surface_id();
+        
+        let surface = surface_guard.get_mut(surface_id).expect("Expect valid surface to unconfigure swap chain.");
+
+        unsafe {
+            B::get_surface_mut(surface)
+                .unconfigure_swapchain(&device.raw);
+        }
+    }
+
     #[cfg(feature = "replay")]
     /// Only triange suspected resource IDs. This helps us to avoid ID collisions
     /// upon creating new resources when re-playing a trace.

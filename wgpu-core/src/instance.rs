@@ -63,24 +63,24 @@ impl Instance {
         }
     }
 
-    pub(crate) fn destroy_surface(&mut self, surface: Surface) {
+    pub(crate) fn destroy_surface(&self, surface: Surface) {
         backends_map! {
             let map = |(surface_backend, self_backend)| {
                 unsafe {
                     if let Some(suf) = surface_backend {
-                        self_backend.as_mut().unwrap().destroy_surface(suf);
+                        self_backend.as_ref().unwrap().destroy_surface(suf);
                     }
                 }
             };
 
             #[cfg(vulkan)]
-            map((surface.vulkan, &mut self.vulkan)),
+            map((surface.vulkan, &self.vulkan)),
             #[cfg(metal)]
-            map((surface.metal, &mut self.metal)),
+            map((surface.metal, &self.metal)),
             #[cfg(dx12)]
-            map((surface.dx12, &mut self.dx12)),
+            map((surface.dx12, &self.dx12)),
             #[cfg(dx11)]
-            map((surface.dx11, &mut self.dx11)),
+            map((surface.dx11, &self.dx11)),
         }
     }
 }
